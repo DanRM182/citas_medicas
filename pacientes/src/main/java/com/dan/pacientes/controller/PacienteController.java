@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/pacientes")
 @Tag(name = "API Pacientes", description = "Métodos para gestión de pacientes")
 public class PacienteController extends CrudController<PacienteRequest, PacienteResponse, PacienteService> {
     public PacienteController(PacienteService service) {
