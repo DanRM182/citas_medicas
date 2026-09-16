@@ -2,6 +2,7 @@ package com.dan.commons.exceptions;
 
 import java.util.NoSuchElementException;
 
+import feign.FeignException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.dan.commons.dto.CustomErrorResponse;
-import com.dan.commons.exceptions.EntidadRelacionadaException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -70,6 +70,26 @@ public class GlobalExceptionHandler {
         log.warn("Error al eliminar un recurso: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new CustomErrorResponse(HttpStatus.CONFLICT.value(), e.getMessage()));
+    }
+
+
+    @ExceptionHandler(FeignException.class)
+    public ResponseEntity<CustomErrorResponse> handleGenericFeignException(FeignException e) {
+        log.error("Error en la comunicación Feign: ", e.getMessage());
+
+        int status = e.status() > 0 ? e.status() : HttpStatus.INTERNAL_SERVER_ERROR.value();
+        String message = switch (status) {
+            case 400 -> "Solicitud incorrecta al servicio remoto.";
+            case 401 -> "No autorizado para acceder al servicio remoto.";
+            case 403 -> "Acceso prohibido al servicio remoto.";
+            case 404 -> "Recurso no encontrado en el servicio remoto.";
+            case 409 -> "Conflicto: el recurso tiene dependencias activas.";
+            case 503 -> "Servicio remoto no disponible.";
+            default -> "Error al comunicarse con el servicio remoto.";
+        };
+        CustomErrorResponse response = new CustomErrorResponse(status, message);
+
+        return ResponseEntity.status(status).body(response);
     }
 
     @ExceptionHandler(Exception.class)

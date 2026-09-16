@@ -3,7 +3,7 @@ package com.dan.msv.citas;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.dan.msv.citas", "com.dan.commons"})
 public class CitasApplication {
 
 	public static void main(String[] args) {

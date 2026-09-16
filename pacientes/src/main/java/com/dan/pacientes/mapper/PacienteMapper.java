@@ -55,8 +55,7 @@ public class PacienteMapper implements CommonMapper<PacienteRequest, PacienteRes
                 entidad.getEmail(),
                 entidad.getNumExpediente(),
                 entidad.getTelefono(),
-                entidad.getDireccion(),
-                entidad.getEstadoRegistro().getDescripcion());
+                entidad.getDireccion());
     }
 
 }

@@ -64,11 +64,11 @@ public class PacienteServiceImpl implements PacienteService {
 
     @Override
     public PacienteResponse actualizar(PacienteRequest request, Long id) {
-        Paciente paciente = obtenerPaciente(id);
+        Paciente paciente = obtenerPacienteActivo(id);
 
         log.info("Actualizando paciente con ID: {}", id);
 
-        validarUnicidad(request);
+        validarUnicidadCambios(request, id);
 
         paciente.actualizar(
                 request.nombre(),
@@ -126,6 +126,20 @@ public class PacienteServiceImpl implements PacienteService {
         if(pacienteRepository.existsByTelefonoAndEstadoRegistro(request.email(), EstadoRegistro.ACTIVO))
             throw new IllegalArgumentException("El teléfono ingresado ya está registrado en un usuario " +
                     "con estado Activo");
+    }
+
+    private void validarUnicidadCambios(PacienteRequest request, Long id) {
+        log.info("Validando unicidad de email y teléfono del paciente activo");
+
+        if(pacienteRepository.existsByEmailIgnoreCaseAndEstadoRegistroAndIdNot(request.email(),
+                EstadoRegistro.ACTIVO, id))
+            throw new IllegalArgumentException("El email " + request.email() + " ya está registrado" +
+                    " en un paciente con estado Activo");
+
+        if(pacienteRepository.existsByTelefonoAndEstadoRegistroAndIdNot(request.email(),
+                EstadoRegistro.ACTIVO, id))
+            throw new IllegalArgumentException("El teléfono " + request.telefono() + " ya está " +
+                    "registrado en un paciente con estado Activo");
     }
 
     private Double generarImc(PacienteRequest request) {
