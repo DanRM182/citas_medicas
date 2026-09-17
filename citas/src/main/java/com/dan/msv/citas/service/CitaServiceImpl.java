@@ -34,6 +34,12 @@ public class CitaServiceImpl implements CitaService {
     private final MedicoClient medicoClient;
     private final PacienteClient pacienteClient;
 
+    private final List<EstadoCita> VALIDAR_ESTADOS_PACIENTE =
+            List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA,
+                    EstadoCita.EN_CURSO);
+    private final List<EstadoCita> VALIDAR_CONFIRMADA_EN_CURSO =
+            List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO);
+
     @Override
     public List<CitaResponse> listar() {
         log.info("Listando todas las citas activas");
@@ -67,8 +73,7 @@ public class CitaServiceImpl implements CitaService {
 
         validarMedicoActivoDisponible(medico);
 
-        validarCitaActiva(request.idPaciente(),
-                List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+        validarCitaActiva(request.idPaciente(), VALIDAR_ESTADOS_PACIENTE,
                 "No se puede registrar porque el paciente tiene una cita activa",
                 citaRepository::existsByIdPacienteAndEstadoCitaIn);
 
@@ -89,6 +94,8 @@ public class CitaServiceImpl implements CitaService {
 
     @Override
     public CitaResponse actualizar(CitaRequest request, Long id) {
+        Long idMedicoAnterior = null;
+
         validarCitaActiva(id,
                 List.of(EstadoCita.EN_CURSO, EstadoCita.FINALIZADA, EstadoCita.CANCELADA),
                 "La cita no puede actualizarse porque no tiene estado PENDIENTE o CONFIRMADA",
@@ -98,23 +105,17 @@ public class CitaServiceImpl implements CitaService {
 
         Cita cita = obtenerCitaOException(id);
 
+        idMedicoAnterior = cita.getIdMedico();
+
         MedicoResponse medico = obtenerMedicoActivo(request.idMedico());
 
         PacienteResponse paciente = obtenerPacienteActivo(request.idPaciente());
 
-        if(!request.idMedico().equals(cita.getIdMedico())) {
+        if(!request.idMedico().equals(idMedicoAnterior))
             validarMedicoActivoDisponible(medico);
 
-            actualizarDisponibilidadMedico(cita.getIdMedico(),
-                    DisponibilidadMedico.DISPONIBLE.getCodigo());
-
-            cambiarDisponibilidadMedicoSegunEstadoCita(medico.id(),
-                    cita.getEstadoCita());
-        }
-
         if(!request.idPaciente().equals(cita.getIdPaciente()))
-            validarCitaActiva(request.idPaciente(),
-                    List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+            validarCitaActiva(request.idPaciente(), VALIDAR_ESTADOS_PACIENTE,
                     "El paciente tiene cita con estado PENDIENTE o CONFIRMADA o EN_CURSO",
                     citaRepository::existsByIdPacienteAndEstadoCitaIn);
 
@@ -123,6 +124,16 @@ public class CitaServiceImpl implements CitaService {
                 request.idMedico(),
                 request.fechaCita(),
                 request.sintomas());
+
+        citaRepository.save(cita);
+
+        if(!request.idMedico().equals(idMedicoAnterior)) {
+            actualizarDisponibilidadMedico(idMedicoAnterior,
+                    DisponibilidadMedico.DISPONIBLE.getCodigo());
+
+            cambiarDisponibilidadMedicoSegunEstadoCita(medico.id(),
+                    cita.getEstadoCita());
+        }
 
         log.info("Cita actualizada con id: {}", id);
 
@@ -153,7 +164,7 @@ public class CitaServiceImpl implements CitaService {
         log.info("Validando si el paciente con id {} tiene citas en estado CONFIRMADA o EN_CURSO",
                 idPaciente);
 
-        validarCitaActiva(idPaciente, List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+        validarCitaActiva(idPaciente, VALIDAR_CONFIRMADA_EN_CURSO,
                 "El paciente tiene citas en estado CONFIRMADA o EN_CURSO",
                 citaRepository::existsByIdPacienteAndEstadoCitaIn);
     }
@@ -163,7 +174,7 @@ public class CitaServiceImpl implements CitaService {
         log.info("Validando si el médico con id {} tiene citas en estado CONFIRMADA o EN_CURSO",
                 idMedico);
 
-        validarCitaActiva(idMedico, List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+        validarCitaActiva(idMedico, VALIDAR_CONFIRMADA_EN_CURSO,
                 "El Médico tiene cita con estado CONFIRMADA o EN_CURSO",
                 citaRepository::existsByIdMedicoAndEstadoCitaIn);
     }
@@ -171,6 +182,10 @@ public class CitaServiceImpl implements CitaService {
     @Override
     public void eliminar(Long id) {
         Cita cita = obtenerCitaOException(id);
+
+        validarCitaActiva(id, VALIDAR_CONFIRMADA_EN_CURSO,
+                "No se puede cancelar una cita activa",
+                citaRepository::existsByIdAndEstadoCitaIn);
 
         log.info("Eliminando cita con id: {}", id);
 
