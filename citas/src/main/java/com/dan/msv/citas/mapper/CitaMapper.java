@@ -19,7 +19,7 @@ public class CitaMapper implements CommonMapper<CitaRequest, CitaResponse, Cita>
                         request.idPaciente(),
                         request.idMedico(),
                         request.fechaCita(),
-                        request.sintomas()) : null;
+                        request.sintomas().trim()) : null;
     }
 
     @Override

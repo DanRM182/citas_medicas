@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(EntidadRelacionadaException.class)
     public ResponseEntity<CustomErrorResponse> handleEntidadRelacionadaException(EntidadRelacionadaException e) {
-        log.warn("Error al eliminar un recurso: {}", e.getMessage());
+        log.warn("Error al procesar un recurso: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new CustomErrorResponse(HttpStatus.CONFLICT.value(), e.getMessage()));
     }
@@ -84,7 +84,7 @@ public class GlobalExceptionHandler {
             case 403 -> "Acceso prohibido al servicio remoto.";
             case 404 -> "Recurso no encontrado en el servicio remoto.";
             case 409 -> "Conflicto: el recurso tiene dependencias activas.";
-            case 503 -> "Servicio remoto no disponible.";
+            case 500 -> "Servicio remoto no disponible.";
             default -> "Error al comunicarse con el servicio remoto.";
         };
         CustomErrorResponse response = new CustomErrorResponse(status, message);

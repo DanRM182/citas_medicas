@@ -1,11 +1,13 @@
 package com.dan.msv.medicos.service;
 
+import com.dan.commons.clients.CitaClient;
 import com.dan.commons.dto.medicos.MedicoRequest;
 import com.dan.commons.dto.medicos.MedicoResponse;
 import com.dan.commons.enums.DisponibilidadMedico;
 import com.dan.commons.enums.EspecialidadMedico;
 import com.dan.commons.enums.EstadoRegistro;
 import com.dan.commons.exceptions.RecursoNoEncontradoException;
+import com.dan.commons.utils.FunctionUtils;
 import com.dan.msv.medicos.entity.Medico;
 import com.dan.msv.medicos.mapper.MedicoMapper;
 import com.dan.msv.medicos.repository.MedicoRepository;
@@ -23,6 +25,7 @@ import java.util.List;
 public class MedicoServiceImpl implements MedicoService {
     private final MedicoRepository medicoRepository;
     private final MedicoMapper medicoMapper;
+    private final CitaClient citaClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -72,6 +75,8 @@ public class MedicoServiceImpl implements MedicoService {
 
         validarCambiosUnicos(request, id);
 
+        validarEstadoCitasMedico(id);
+
         medico.actualizar(
                 request.nombre(),
                 request.apellidoPaterno(),
@@ -93,6 +98,9 @@ public class MedicoServiceImpl implements MedicoService {
 
         log.info("Actualizando disponibilidad del médico con id: {}", idMedico);
 
+        if(DisponibilidadMedico.DISPONIBLE.getCodigo().equals(idDisponibilidad))
+            validarEstadoCitasMedico(idMedico);
+
         DisponibilidadMedico nuevaDisponibilidad = DisponibilidadMedico.obtenerDisponibilidaPorCodigo(idDisponibilidad);
 
         DisponibilidadMedico disponibilidadAnterior = medico.getDisponibilidad();
@@ -108,6 +116,8 @@ public class MedicoServiceImpl implements MedicoService {
         Medico medico = obtenerMEdicoActivoPorId(id);
 
         log.info("Eliminando médico con id: {}", id);
+
+        validarEstadoCitasMedico(id);
 
         medico.eliminar();
 
@@ -174,5 +184,12 @@ public class MedicoServiceImpl implements MedicoService {
                 request.cedulaProfesional(), EstadoRegistro.ACTIVO, id))
             throw new IllegalArgumentException("Ya existe un médico activo registrado con la cédula profersional: "
                     + request.cedulaProfesional());
+    }
+
+    private void validarEstadoCitasMedico(Long id) {
+        log.info("Validando si el médico tiene citas con estado CONFIRMADA o EN_CURSO");
+
+        FunctionUtils.validarEstadoCitas(id, citaClient::validarEstadoCitasMedico,
+                "El médico con ID: " +id + " tiene actualmente una cita activa");
     }
 }

@@ -35,13 +35,13 @@ public class Paciente {
     @Column(name = "EDAD", nullable = false)
     private Short edad;
 
-    @Column(name = "PESO",  nullable = false)
+    @Column(name = "PESO", nullable = false)
     private Double peso;
 
-    @Column(name = "ESTATURA",  nullable = false)
+    @Column(name = "ESTATURA", nullable = false)
     private Double estatura;
 
-    @Column(name = "IMC",  nullable = false)
+    @Column(name = "IMC", nullable = false)
     private Double imc;
 
     @Column(name = "EMAIL", length = 100, nullable = false)
