@@ -6,4 +6,8 @@ import com.dan.msv.citas.dto.CitaResponse;
 
 public interface CitaService extends CrudService<CitaRequest, CitaResponse> {
     void actualizarEstadoCita(Long idCita, Long idEstadoCita);
+
+    void validarEstadoCitasDePaciente(Long idPaciente);
+
+    void validarEstadoCitasDeMedico(Long idMedico);
 }

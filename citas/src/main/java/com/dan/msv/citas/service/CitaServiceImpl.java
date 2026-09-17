@@ -6,20 +6,23 @@ import com.dan.commons.dto.medicos.MedicoResponse;
 import com.dan.commons.dto.pacientes.PacienteResponse;
 import com.dan.commons.enums.DisponibilidadMedico;
 import com.dan.commons.enums.EstadoRegistro;
+import com.dan.commons.exceptions.EntidadRelacionadaException;
 import com.dan.commons.exceptions.RecursoNoEncontradoException;
-import com.dan.commons.utils.FeignUtils;
 import com.dan.msv.citas.dto.CitaRequest;
 import com.dan.msv.citas.dto.CitaResponse;
 import com.dan.msv.citas.entity.Cita;
 import com.dan.msv.citas.enums.EstadoCita;
 import com.dan.msv.citas.mapper.CitaMapper;
 import com.dan.msv.citas.repository.CitaRepository;
+import feign.FeignException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 @Service
 @AllArgsConstructor
@@ -64,7 +67,10 @@ public class CitaServiceImpl implements CitaService {
 
         validarMedicoActivoDisponible(medico);
 
-        validarPacienteCitaActiva(paciente);
+        validarCitaActiva(request.idPaciente(),
+                List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+                "No se puede registrar porque el paciente tiene una cita activa",
+                citaRepository::existsByIdPacienteAndEstadoCitaIn);
 
         Cita cita = citaMapper.requestAEntidad(request);
 
@@ -83,7 +89,10 @@ public class CitaServiceImpl implements CitaService {
 
     @Override
     public CitaResponse actualizar(CitaRequest request, Long id) {
-        validarCitaActiva(id);
+        validarCitaActiva(id,
+                List.of(EstadoCita.EN_CURSO, EstadoCita.FINALIZADA, EstadoCita.CANCELADA),
+                "La cita no puede actualizarse porque no tiene estado PENDIENTE o CONFIRMADA",
+                citaRepository::existsByIdAndEstadoCitaIn);
 
         log.info("Actualizando cita con id: {}", id);
 
@@ -104,7 +113,10 @@ public class CitaServiceImpl implements CitaService {
         }
 
         if(!request.idPaciente().equals(cita.getIdPaciente()))
-            validarPacienteCitaActiva(paciente);
+            validarCitaActiva(request.idPaciente(),
+                    List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+                    "El paciente tiene cita con estado PENDIENTE o CONFIRMADA o EN_CURSO",
+                    citaRepository::existsByIdPacienteAndEstadoCitaIn);
 
         cita.actualizar(
                 request.idPaciente(),
@@ -137,6 +149,26 @@ public class CitaServiceImpl implements CitaService {
     }
 
     @Override
+    public void validarEstadoCitasDePaciente(Long idPaciente) {
+        log.info("Validando si el paciente con id {} tiene citas en estado CONFIRMADA o EN_CURSO",
+                idPaciente);
+
+        validarCitaActiva(idPaciente, List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+                "El paciente tiene citas en estado CONFIRMADA o EN_CURSO",
+                citaRepository::existsByIdPacienteAndEstadoCitaIn);
+    }
+
+    @Override
+    public void validarEstadoCitasDeMedico(Long idMedico) {
+        log.info("Validando si el médico con id {} tiene citas en estado CONFIRMADA o EN_CURSO",
+                idMedico);
+
+        validarCitaActiva(idMedico, List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO),
+                "El Médico tiene cita con estado CONFIRMADA o EN_CURSO",
+                citaRepository::existsByIdMedicoAndEstadoCitaIn);
+    }
+
+    @Override
     public void eliminar(Long id) {
         Cita cita = obtenerCitaOException(id);
 
@@ -163,28 +195,28 @@ public class CitaServiceImpl implements CitaService {
     private MedicoResponse obtenerMedicoActivo(Long id) {
         log.info("Buscando médico activo con id {} en el servicio remoto...", id);
 
-        return FeignUtils.validarObjetoRecibido(id,medicoClient::obtenerMedicoActivoPorId,
+        return validarObjetoRecibido(id,medicoClient::obtenerMedicoActivoPorId,
                 "Medico activo no encontrado con id: " + id);
     }
 
     private MedicoResponse obtenerMedicoSinEstado(Long id) {
         log.info("Buscando médico sin estado con id {} en el servicio remoto...", id);
 
-        return FeignUtils.validarObjetoRecibido(id,medicoClient::obtenerMedicoSinEstadoPorId,
+        return validarObjetoRecibido(id,medicoClient::obtenerMedicoSinEstadoPorId,
                 "Medico no encontrado con id: " + id);
     }
 
     private PacienteResponse obtenerPacienteActivo(Long id) {
         log.info("Buscando paciente activo con id {} en el servicio remoto...", id);
 
-        return FeignUtils.validarObjetoRecibido(id,pacienteClient::obtenerPacienteActivoPorId,
+        return validarObjetoRecibido(id,pacienteClient::obtenerPacienteActivoPorId,
                 "Paciente activo no encontrado con id: " + id);
     }
 
     private PacienteResponse obtenerPacienteSinEstado(Long id) {
         log.info("Buscando paciente sin estado con id {} en el servicio remoto...", id);
 
-        return FeignUtils.validarObjetoRecibido(id,pacienteClient::obtenerPacienteSinEstadoPorId,
+        return validarObjetoRecibido(id,pacienteClient::obtenerPacienteSinEstadoPorId,
                 "Paciente no encontrado con id: " + id);
     }
 
@@ -195,13 +227,22 @@ public class CitaServiceImpl implements CitaService {
             throw  new IllegalStateException("El medico no esta disponible para consulta");
     }
 
-    private void validarPacienteCitaActiva(PacienteResponse paciente) {
-        log.info("Validando que el paciente no tenga citas activas...");
+    private void validarCitaActiva(Long id, List<EstadoCita> estadosCita, String mensaje,
+                                   BiFunction<Long, List<EstadoCita>, Boolean> existeCita) {
+        log.info("Validando si existe cita activa...");
 
-        if(citaRepository.existsByIdPacienteAndEstadoCitaIn(paciente.id(),
-                List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO)))
-            throw  new IllegalStateException("El paciente tiene actualmente una cita activa");
+        if(existeCita.apply(id, estadosCita))
+            throw  new EntidadRelacionadaException(mensaje);
     }
+
+    private <T, R> R validarObjetoRecibido(T objeto, Function<T, R> obtenerObjeto, String mensaje) {
+        try {
+            return obtenerObjeto.apply(objeto);
+        } catch (FeignException.NotFound e) {
+            throw new RecursoNoEncontradoException(mensaje);
+        }
+    }
+
 
     private void actualizarDisponibilidadMedico(Long idMedico, Long idDisponibilidad) {
         log.info("Actualizando disponibilidad del médico en el servicio remoto...");
@@ -223,15 +264,4 @@ public class CitaServiceImpl implements CitaService {
                     DisponibilidadMedico.DISPONIBLE.getCodigo());
         }
     }
-
-    private void validarCitaActiva(Long id) {
-        log.info("Validando estado de cita con id: {}", id);
-
-        if(!citaRepository.existsByIdAndEstadoCitaIn(id, List.of(EstadoCita.PENDIENTE,
-                EstadoCita.CONFIRMADA)))
-            throw new IllegalStateException("La cita no puede actualizarse porque no " +
-                    "tiene estado PENDIENTE o CONFIRMADA");
-
-    }
-
 }

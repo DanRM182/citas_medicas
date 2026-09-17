@@ -1,12 +1,16 @@
 package com.dan.pacientes.service;
 
+import com.dan.commons.clients.CitaClient;
 import com.dan.commons.dto.pacientes.PacienteRequest;
 import com.dan.commons.dto.pacientes.PacienteResponse;
+import com.dan.commons.exceptions.EntidadRelacionadaException;
+import com.dan.commons.utils.FunctionUtils;
 import com.dan.pacientes.entity.Paciente;
 import com.dan.commons.enums.EstadoRegistro;
 import com.dan.commons.exceptions.RecursoNoEncontradoException;
 import com.dan.pacientes.mapper.PacienteMapper;
 import com.dan.pacientes.repository.PacienteRepository;
+import feign.FeignException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +25,7 @@ import java.util.List;
 public class PacienteServiceImpl implements PacienteService {
     private final PacienteRepository pacienteRepository;
     private final PacienteMapper pacienteMapper;
+    private final CitaClient citaClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,6 +75,8 @@ public class PacienteServiceImpl implements PacienteService {
 
         validarUnicidadCambios(request, id);
 
+        validarEstadoCitasPaciente(id);
+
         paciente.actualizar(
                 request.nombre(),
                 request.apellidoPaterno(),
@@ -94,6 +101,8 @@ public class PacienteServiceImpl implements PacienteService {
         Paciente paciente = obtenerPaciente(id);
 
         log.info("Eliminando paciente con ID: {}", id);
+
+        validarEstadoCitasPaciente(id);
 
         paciente.eliminar();
 
@@ -152,5 +161,12 @@ public class PacienteServiceImpl implements PacienteService {
         log.info("Generando Número de Registro");
 
         return pacienteRepository.generarExpediente(request.telefono());
+    }
+
+    private void validarEstadoCitasPaciente(Long id) {
+        log.info("Validando si el paciente tiene citas con estado CONFIRMADA o EN_CURSO");
+
+        FunctionUtils.validarEstadoCitas(id, citaClient::validarEstadoCitasPaciente,
+                "El paciente con ID: " +id + " tiene actualmente una cita activa");
     }
 }

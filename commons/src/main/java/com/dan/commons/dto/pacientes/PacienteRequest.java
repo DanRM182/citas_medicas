@@ -34,7 +34,7 @@ public record PacienteRequest(
 
         @Schema(description = "Estatura del paciente", example = "1.65")
         @NotNull(message = "La estatura del paciente es requerido")
-        @DecimalMin(value = "1.0", message = "La estatura debe ser mínimo 2.0")
+        @DecimalMin(value = "1.0", message = "La estatura debe ser mínimo 1.0")
         @DecimalMax(value = "2.0", message = "La estatura debe ser máximo 2.0")
         Double estatura,
 
