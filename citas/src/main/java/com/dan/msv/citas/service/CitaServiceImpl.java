@@ -96,14 +96,13 @@ public class CitaServiceImpl implements CitaService {
     public CitaResponse actualizar(CitaRequest request, Long id) {
         Long idMedicoAnterior = null;
 
-        validarCitaActiva(id,
-                List.of(EstadoCita.EN_CURSO, EstadoCita.FINALIZADA, EstadoCita.CANCELADA),
-                "La cita no puede actualizarse porque no tiene estado PENDIENTE o CONFIRMADA",
-                citaRepository::existsByIdAndEstadoCitaIn);
-
         log.info("Actualizando cita con id: {}", id);
 
         Cita cita = obtenerCitaOException(id);
+
+        if(!cita.getEstadoCita().isActualizable())
+        throw new EntidadRelacionadaException("La cita con ID: " + id + " no se puede actualizar" +
+                " porque no está en estado PENDIENTE o CONFIRMADA");
 
         idMedicoAnterior = cita.getIdMedico();
 
@@ -183,18 +182,18 @@ public class CitaServiceImpl implements CitaService {
     public void eliminar(Long id) {
         Cita cita = obtenerCitaOException(id);
 
-        validarCitaActiva(id, VALIDAR_CONFIRMADA_EN_CURSO,
-                "No se puede cancelar una cita activa",
-                citaRepository::existsByIdAndEstadoCitaIn);
-
         log.info("Eliminando cita con id: {}", id);
+
+        if(!cita.getEstadoCita().isEliminable())
+            throw new EntidadRelacionadaException("La cita con ID: " + id + " no se puede eliminar" +
+                    " porque no está en estado PENDIENTE o CANCELADA o FINALIZADA");
 
         cita.eliminar();
 
+        citaRepository.save(cita);
+
         if(cita.getEstadoCita() == EstadoCita.PENDIENTE)
             actualizarDisponibilidadMedico(cita.getIdMedico(), DisponibilidadMedico.DISPONIBLE.getCodigo());
-
-        cambiarDisponibilidadMedicoSegunEstadoCita(cita.getIdMedico(), cita.getEstadoCita());
 
         log.info("Cita con id {} ha sido marcada como eliminada", id);
     }
